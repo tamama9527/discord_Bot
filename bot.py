@@ -19,7 +19,7 @@ ytdlopts = {
     'restrictfilenames': True,
     'noplaylist':True,
     'nocheckcertificate': True,
-    'ignoreerrors': True,
+    'ignoreerrors': False,
     'logtostderr': False,
     'quiet': True,
     'geo-bypass':True,
@@ -355,8 +355,7 @@ class Music(commands.Cog):
                         source['requester']=Song['requester']
                     await player.queue.put((10,datetime.now().timestamp(),source))
                 except Exception as e:
-                    await ctx.send(f"```ini\n[機器人發現{SongList['song'][number-1]['title']} 此首歌存在錯誤,請手動刪除\n]```")
-                    pass
+                    return await ctx.send(f"```ini\n[機器人發現 第{number}首-{SongList['song'][number-1]['title']} 此首歌存在錯誤,請手動刪除]\n原因:{str(e)[7:]}```")
                 return await ctx.send(f"```ini\n[{ctx.author.display_name} 新增 {SongList['song'][number-1]['title']} 到佇列]\n```")
             else:
                 return await ctx.send(f"```ini\n[因為歌單太大，現在不支援匯入全部歌單]\n```",delete_after=15)
@@ -381,7 +380,8 @@ class Music(commands.Cog):
                 await ctx.invoke(self.connect_)
             player = self.get_player(ctx)
             random.seed(datetime.now().timestamp())
-            RandomNumber = [random.randint(0,len(SongList['song'])) for i in range(num)]
+            RandomNumber = [random.randint(0,len(SongList['song'])-1) for i in range(num)]
+            BrokenSong = 0
             for i in RandomNumber:
                 Song = SongList['song'][i]
                 try:
@@ -390,9 +390,11 @@ class Music(commands.Cog):
                         source['requester']=Song['requester']
                     await player.queue.put((10,datetime.now().timestamp(),source))
                 except Exception as e:
-                    await ctx.send(f'```ini\n[機器人發現第{i+1}首-{SongList["song"][i]["title"]}  此首歌存在錯誤,請手動刪除]\n```')
+                    print(e)
+                    BrokenSong += 1
+                    await ctx.send(f'```ini\n[機器人發現 第{i+1}首-{SongList["song"][i]["title"]}  此首歌存在錯誤,請手動刪除]\n原因:{str(e)[7:]}```')
                     pass
-            return await ctx.send(f'```ini\n[{ctx.author.display_name} 新增 {num}首歌到佇列]\n```',delete_after=30)
+            return await ctx.send(f'```ini\n[{ctx.author.display_name} 新增 {num-BrokenSong}首歌到佇列]\n```')
 
     @commands.command(name='force',aliases=['f'])
     async def force_(self,ctx,*,search:str):
@@ -548,4 +550,4 @@ async def on_ready():
 bot.add_cog(Music(bot))
 with open('key.txt','r') as f:
     key = f.read()
-bot.run(key)
+bot.run(key.strip())
