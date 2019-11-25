@@ -31,7 +31,7 @@ ytdlopts = {
 
 ffmpegopts = {
     'before_options': '-nostdin  -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 2',
-    'options': '-vn'
+    'options': '-vn -af loudnorm=I=-16:TP=-1.5:LRA=11'
 }
 ytdl = YoutubeDL(ytdlopts)
 playlist_opt = copy.deepcopy(ytdlopts)
@@ -46,7 +46,6 @@ class InvalidVoiceChannel(VoiceConnectionError):
 
 
 class YTDLSource(discord.PCMVolumeTransformer):
-
     def __init__(self, source, *, data, requester):
         super().__init__(source)
         self.requester = requester
@@ -292,7 +291,7 @@ class Music(commands.Cog):
             with open('song.json','w') as f:
                 json.dump(SongList,f)
         await player.queue.put((5,datetime.now().timestamp(),source))
-        return await ctx.send(f'```ini\n[{ctx.author.display_name} 新增 {sourcece["title"]} 到佇列中]\n```',delete_after=10)
+        return await ctx.send(f'```ini\n[{ctx.author.display_name} 新增 {source["title"]} 到佇列中]\n```',delete_after=10)
 
     @commands.command(name='add',aliases=['a'])
     async def add_(self,ctx,*,inputstr:str):
