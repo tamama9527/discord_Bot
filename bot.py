@@ -28,14 +28,11 @@ ytdlopts = {
     'cachedir':False,
     'source_address': '0.0.0.0'  # ipv6 addresses cause issues sometimes
 }
-
-ffmpegopts = {
-    'before_options': '-nostdin  -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 2',
+Downloaded_ffmpegopts = {
+    'before_options': '-nostdin',
     'options': '-vn -af loudnorm=I=-16:TP=-1.5:LRA=11'
 }
 ytdl = YoutubeDL(ytdlopts)
-playlist_opt = copy.deepcopy(ytdlopts)
-ytdls = YoutubeDL(playlist_opt)
 
 class VoiceConnectionError(commands.CommandError):
     """Custom Exception class for connection errors."""
@@ -64,20 +61,17 @@ class YTDLSource(discord.PCMVolumeTransformer):
         return self.__getattribute__(item)
 
     @classmethod
-    async def create_source(cls, ctx, search: str, *, loop, download=False,islist=False):
+    async def create_source(cls, ctx, search: str, *, loop,islist=False):
         loop = loop or asyncio.get_event_loop()
-        to_run = partial(ytdl.extract_info, url=search, download=False)
+        to_run = partial(ytdl.extract_info, url=search, download=True)
         data = await loop.run_in_executor(None, to_run)
         if 'entries' in data:
             # take first item from a playlist
             data = data['entries'][0]
         if islist is True:
             await ctx.send(f'```ini\n[{ctx.author.display_name} 新增 {data["title"]} 到佇列中]\n```',delete_after=10)
-        if download:
-            source = ytdl.prepare_filename(data)
-        else:
-            return {'webpage_url': data['webpage_url'], 'requester': ctx.author.display_name, 'title': data['title']}
-        return cls(discord.FFmpegPCMAudio(source), data=data, requester=ctx.author.display_name)
+        source = ytdl.prepare_filename(data)
+        return {'webpage_url':data['webpage_url'],'file_url':source,'requester':ctx.author.display_name,'title':data['title']}
 
     @classmethod
     async def regather_stream(cls, data, *, loop):
@@ -86,11 +80,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
         Since Youtube Streaming links expire."""
         loop = loop or asyncio.get_event_loop()
         requester = data['requester']
-
-        to_run = partial(ytdl.extract_info, url=data['webpage_url'], download=False)
-        data = await loop.run_in_executor(None, to_run)
-
-        return cls(discord.FFmpegPCMAudio(data['url'],**ffmpegopts), data=data, requester=requester)
+        return cls(discord.FFmpegPCMAudio(data['file_url'],**Downloaded_ffmpegopts), data=data, requester=requester)
 
 
 class MusicPlayer:
@@ -282,11 +272,11 @@ class Music(commands.Cog):
         player = self.get_player(ctx)
         # If download is False, source will be a dict which will be used later to regather the stream.
         # If download is True, source will be a discord.FFmpegPCMAudio with a VolumeTransformer.
-        source = await YTDLSource.create_source(ctx, search, loop=self.bot.loop, download=False)
+        source = await YTDLSource.create_source(ctx, search, loop=self.bot.loop)
         with open('song.json','r') as f:
             SongList = json.loads(f.read())
         if source['webpage_url'] not in SongList['key']:
-            SongList['song'].append({'title':source['title'],'url':source['webpage_url'],'requester':source['requester']})
+            SongList['song'].append({'title':source['title'],'url':source['webpage_url'],'requester':source['requester'],'file_url':source['file_url']})
             SongList['key'].append(source['webpage_url'])
             with open('song.json','w') as f:
                 json.dump(SongList,f)
@@ -309,7 +299,7 @@ class Music(commands.Cog):
             return await ctx.send(f'**`{ctx.author.display_name}`**,請輸入1~50間的數字')
         SearchList = kkbox.search(songlang,songnum)
         for i in SearchList:
-            source = await YTDLSource.create_source(ctx, i, loop=self.bot.loop, download=True,islist=True)
+            source = await YTDLSource.create_source(ctx, i, loop=self.bot.loop,islist=True)
             await player.queue.put((10,datetime.now().timestamp(),source))
         return await ctx.send(f'```ini\n[{ctx.author.display_name}從新增{songnum}首歌]\n```')
     @commands.command(name='playlist',aliases=['pl'])
@@ -349,10 +339,10 @@ class Music(commands.Cog):
                     return await ctx.send(f"```ini\n[請輸入歌曲編號\n]```")
                 Song = SongList['song'][number-1]
                 try:
-                    source = await YTDLSource.create_source(ctx,Song['url'],loop=self.bot.loop,download=False,islist=False)
-                    if 'requester' in Song:
-                        source['requester']=Song['requester']
-                    await player.queue.put((10,datetime.now().timestamp(),source))
+                    if 'requester' not in Song:
+                        Song['requester'] = ctx.author.display_name
+                    await player.queue.put((10,datetime.now().timestamp(),Song))
+                    return await ctx.send(f'```ini\n[{ctx.author.display_name} 新增 {Song["title"]} 到佇列中]\n```',delete_after=10)
                 except Exception as e:
                     return await ctx.send(f"```ini\n[機器人發現 第{number}首-{SongList['song'][number-1]['title']} 此首歌存在錯誤,請手動刪除]\n原因:{str(e)[7:]}```")
                 return await ctx.send(f"```ini\n[{ctx.author.display_name} 新增 {SongList['song'][number-1]['title']} 到佇列]\n```")
@@ -384,10 +374,9 @@ class Music(commands.Cog):
             for i in RandomNumber:
                 Song = SongList['song'][i]
                 try:
-                    source = await YTDLSource.create_source(ctx,Song['url'], loop=self.bot.loop, download=False,islist=True)
-                    if 'requester' in Song:
-                        source['requester']=Song['requester']
-                    await player.queue.put((10,datetime.now().timestamp(),source))
+                    if 'requester' not in Song:
+                        Song['requester'] = ctx.author.display_name
+                    await player.queue.put((10,datetime.now().timestamp(),Song))
                 except Exception as e:
                     print(e)
                     BrokenSong += 1
@@ -405,11 +394,11 @@ class Music(commands.Cog):
             await ctx.invoke(self.connect_)
 
         player = self.get_player(ctx)
-        source = await YTDLSource.create_source(ctx, search, loop=self.bot.loop, download=False)
+        source = await YTDLSource.create_source(ctx, search, loop=self.bot.loop)
         with open('song.json','r') as f:
             SongList = json.loads(f.read())
         if source['webpage_url'] not in SongList['key']:
-            SongList['song'].append({'title':source['title'],'url':source['webpage_url'],'requester':source['requester']})
+            SongList['song'].append({'title':source['title'],'url':source['webpage_url'],'requester':source['requester'],'file_url':source['file_url']})
             SongList['key'].append(source['webpage_url'])
             with open('song.json','w') as f:
                 json.dump(SongList,f)
