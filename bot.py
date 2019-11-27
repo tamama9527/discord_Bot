@@ -9,7 +9,6 @@ from functools import partial
 from youtube_dl import YoutubeDL
 import kkbox
 import random
-import copy
 import json
 from datetime import datetime
 
@@ -17,15 +16,15 @@ ytdlopts = {
     'format': 'bestaudio/best',
     'outtmpl': 'downloads/%(extractor)s-%(id)s.%(ext)s',
     'restrictfilenames': True,
-    'noplaylist':True,
+    'noplaylist': True,
     'nocheckcertificate': True,
     'ignoreerrors': False,
     'logtostderr': False,
     'quiet': True,
-    'geo-bypass':True,
+    'geo-bypass': True,
     'no_warnings': True,
     'default_search': 'auto',
-    'cachedir':False,
+    'cachedir': False,
     'source_address': '0.0.0.0'  # ipv6 addresses cause issues sometimes
 }
 Downloaded_ffmpegopts = {
@@ -33,6 +32,7 @@ Downloaded_ffmpegopts = {
     'options': '-vn -af loudnorm=I=-16:TP=-1.5:LRA=11'
 }
 ytdl = YoutubeDL(ytdlopts)
+
 
 class VoiceConnectionError(commands.CommandError):
     """Custom Exception class for connection errors."""
@@ -61,7 +61,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
         return self.__getattribute__(item)
 
     @classmethod
-    async def create_source(cls, ctx, search: str, *, loop,islist=False):
+    async def create_source(cls, ctx, search: str, *, loop, islist=False):
         loop = loop or asyncio.get_event_loop()
         to_run = partial(ytdl.extract_info, url=search, download=True)
         data = await loop.run_in_executor(None, to_run)
@@ -69,9 +69,9 @@ class YTDLSource(discord.PCMVolumeTransformer):
             # take first item from a playlist
             data = data['entries'][0]
         if islist is True:
-            await ctx.send(f'```ini\n[{ctx.author.display_name} 新增 {data["title"]} 到佇列中]\n```',delete_after=10)
+            await ctx.send(f'```ini\n[{ctx.author.display_name} 新增 {data["title"]} 到佇列中]\n```', delete_after=10)
         source = ytdl.prepare_filename(data)
-        return {'webpage_url':data['webpage_url'],'file_url':source,'requester':ctx.author.display_name,'title':data['title']}
+        return {'webpage_url': data['webpage_url'], 'file_url': source, 'requester': ctx.author.display_name, 'title': data['title']}
 
     @classmethod
     async def regather_stream(cls, data, *, loop):
@@ -80,7 +80,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
         Since Youtube Streaming links expire."""
         loop = loop or asyncio.get_event_loop()
         requester = data['requester']
-        return cls(discord.FFmpegPCMAudio(data['file_url'],**Downloaded_ffmpegopts), data=data, requester=requester)
+        return cls(discord.FFmpegPCMAudio(data['file_url'], **Downloaded_ffmpegopts), data=data, requester=requester)
 
 
 class MusicPlayer:
@@ -92,7 +92,8 @@ class MusicPlayer:
     When the bot disconnects from the Voice it's instance will be destroyed.
     """
 
-    __slots__ = ('bot', '_guild', '_channel', '_cog', 'queue', 'next', 'current', 'np', 'volume')
+    __slots__ = ('bot', '_guild', '_channel', '_cog',
+                 'queue', 'next', 'current', 'np', 'volume')
 
     def __init__(self, ctx):
         self.bot = ctx.bot
@@ -137,7 +138,8 @@ class MusicPlayer:
             source.volume = self.volume
             self.current = source
 
-            self._guild.voice_client.play(source, after=lambda _: self.bot.loop.call_soon_threadsafe(self.next.set))
+            self._guild.voice_client.play(
+                source, after=lambda _: self.bot.loop.call_soon_threadsafe(self.next.set))
             self.np = await self._channel.send(f'**正在播放:** `{source.title}` 由'
                                                f'`{source.requester}`點播')
             await self.next.wait()
@@ -195,8 +197,10 @@ class Music(commands.Cog):
             await ctx.send('Error connecting to Voice Channel. '
                            'Please make sure you are in a valid channel or provide me with one')
 
-        print('Ignoring exception in command {}:'.format(ctx.command), file=sys.stderr)
-        traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
+        print('Ignoring exception in command {}:'.format(
+            ctx.command), file=sys.stderr)
+        traceback.print_exception(
+            type(error), error, error.__traceback__, file=sys.stderr)
 
     def get_player(self, ctx):
         """Retrieve the guild player, or generate one."""
@@ -207,9 +211,9 @@ class Music(commands.Cog):
             self.players[ctx.guild.id] = player
 
         return player
-    
+
     @commands.command(name='connect', aliases=['join'])
-    async def connect_(self, ctx, *, channel: discord.VoiceChannel=None):
+    async def connect_(self, ctx, *, channel: discord.VoiceChannel = None):
         """Connect to voice.
 
         Parameters
@@ -224,7 +228,8 @@ class Music(commands.Cog):
             try:
                 channel = ctx.author.voice.channel
             except AttributeError:
-                raise InvalidVoiceChannel('No channel to join. Please either specify a valid channel or join one.')
+                raise InvalidVoiceChannel(
+                    'No channel to join. Please either specify a valid channel or join one.')
 
         vc = ctx.voice_client
         if vc:
@@ -233,24 +238,26 @@ class Music(commands.Cog):
             try:
                 await vc.move_to(channel)
             except asyncio.TimeoutError:
-                raise VoiceConnectionError(f'Moving to channel: <{channel}> timed out.')
+                raise VoiceConnectionError(
+                    f'Moving to channel: <{channel}> timed out.')
         else:
             try:
                 await channel.connect()
             except asyncio.TimeoutError:
-                raise VoiceConnectionError(f'Connecting to channel: <{channel}> timed out.')
+                raise VoiceConnectionError(
+                    f'Connecting to channel: <{channel}> timed out.')
 
         await ctx.send(f'Connected to: **{channel}**', delete_after=20)
 
     @commands.command(name='clean')
-    async def clean_(self,ctx):
+    async def clean_(self, ctx):
         """清空播放清單裡待播放的歌曲
         此指令會清空佇列和現在播放的歌曲，請小心使用
         """
         player = self.get_player(ctx)
         player.queue = asyncio.PriorityQueue()
 
-    @commands.command(name='play', aliases=['sing','p','P'])
+    @commands.command(name='play', aliases=['sing', 'p', 'P'])
     async def play_(self, ctx, *, search: str):
         """新增歌曲至播放清單
 
@@ -273,18 +280,19 @@ class Music(commands.Cog):
         # If download is False, source will be a dict which will be used later to regather the stream.
         # If download is True, source will be a discord.FFmpegPCMAudio with a VolumeTransformer.
         source = await YTDLSource.create_source(ctx, search, loop=self.bot.loop)
-        with open('song.json','r') as f:
+        with open('song.json', 'r') as f:
             SongList = json.loads(f.read())
         if source['webpage_url'] not in SongList['key']:
-            SongList['song'].append({'title':source['title'],'url':source['webpage_url'],'requester':source['requester'],'file_url':source['file_url']})
+            SongList['song'].append({'title': source['title'], 'url': source['webpage_url'],
+                                     'requester': source['requester'], 'file_url': source['file_url']})
             SongList['key'].append(source['webpage_url'])
-            with open('song.json','w') as f:
-                json.dump(SongList,f)
-        await player.queue.put((5,datetime.now().timestamp(),source))
-        return await ctx.send(f'```ini\n[{ctx.author.display_name} 新增 {source["title"]} 到佇列中]\n```',delete_after=10)
+            with open('song.json', 'w') as f:
+                json.dump(SongList, f)
+        await player.queue.put((5, datetime.now().timestamp(), source))
+        return await ctx.send(f'```ini\n[{ctx.author.display_name} 新增 {source["title"]} 到佇列中]\n```', delete_after=10)
 
-    @commands.command(name='add',aliases=['a'])
-    async def add_(self,ctx,*,inputstr:str):
+    @commands.command(name='add', aliases=['a'])
+    async def add_(self, ctx, *, inputstr: str):
         """請輸入想要新增歌曲的語言ch,jp,en,kr,tw,hk和數量
         ex:!add ch 10
         """
@@ -295,15 +303,16 @@ class Music(commands.Cog):
         player = self.get_player(ctx)
         songlang = inputstr.split(' ')[0]
         songnum = int(inputstr.split(' ')[1])
-        if songnum>50 or songnum<0:
+        if songnum > 50 or songnum < 0:
             return await ctx.send(f'**`{ctx.author.display_name}`**,請輸入1~50間的數字')
-        SearchList = kkbox.search(songlang,songnum)
+        SearchList = kkbox.search(songlang, songnum)
         for i in SearchList:
-            source = await YTDLSource.create_source(ctx, i, loop=self.bot.loop,islist=True)
-            await player.queue.put((10,datetime.now().timestamp(),source))
+            source = await YTDLSource.create_source(ctx, i, loop=self.bot.loop, islist=True)
+            await player.queue.put((10, datetime.now().timestamp(), source))
         return await ctx.send(f'```ini\n[{ctx.author.display_name}從新增{songnum}首歌]\n```')
-    @commands.command(name='playlist',aliases=['pl'])
-    async def playlist_(self,ctx,*,inputstr:str):
+
+    @commands.command(name='playlist', aliases=['pl'])
+    async def playlist_(self, ctx, *, inputstr: str):
         """自定義歌單，務必閱讀使用方法！！
         此指令有許多子指令，請詳細閱讀用法
         ex:!pl list 列出自定義歌單所有歌曲
@@ -313,25 +322,28 @@ class Music(commands.Cog):
         """
         command = inputstr.split(' ')[0]
         if command == 'list':
-            with open('song.json','r') as f:
+            with open('song.json', 'r') as f:
                 SongList = json.loads(f.read())
-            templist = [SongList['song'][i:i+20] for i in range(0,len(SongList['song']),20)]
+            templist = [SongList['song'][i:i+20]
+                        for i in range(0, len(SongList['song']), 20)]
             count = 0
             channel = ctx.channel
             for i in templist:
-                fmt = '\n'.join(f'**`{count*20+_+1}`**.**`{i[_]["title"]}`**' for _ in range(len(i)))
-                embed = discord.Embed(title=f'自定義清單 -總共有 {len(SongList["song"])}首歌-第{count*20+1}到{count*20+len(i)}', description=fmt) 
+                fmt = '\n'.join(
+                    f'**`{count*20+_+1}`**.**`{i[_]["title"]}`**' for _ in range(len(i)))
+                embed = discord.Embed(
+                    title=f'自定義清單 -總共有 {len(SongList["song"])}首歌-第{count*20+1}到{count*20+len(i)}', description=fmt)
                 await ctx.send(embed=embed)
                 count = count + 1
         elif command == 'play':
-            with open('song.json','r') as f:
+            with open('song.json', 'r') as f:
                 SongList = json.loads(f.read())
             await ctx.trigger_typing()
             vc = ctx.voice_client
             if not vc:
                 await ctx.invoke(self.connect_)
             player = self.get_player(ctx)
-            #sepcific song
+            # sepcific song
             if inputstr.split(' ')[1] is not None:
                 try:
                     number = int(inputstr.split(' ')[1])
@@ -341,26 +353,26 @@ class Music(commands.Cog):
                 try:
                     if 'requester' not in Song:
                         Song['requester'] = ctx.author.display_name
-                    await player.queue.put((10,datetime.now().timestamp(),Song))
-                    return await ctx.send(f'```ini\n[{ctx.author.display_name} 新增 {Song["title"]} 到佇列中]\n```',delete_after=10)
+                    await player.queue.put((10, datetime.now().timestamp(), Song))
+                    return await ctx.send(f'```ini\n[{ctx.author.display_name} 新增 {Song["title"]} 到佇列中]\n```', delete_after=10)
                 except Exception as e:
                     return await ctx.send(f"```ini\n[機器人發現 第{number}首-{SongList['song'][number-1]['title']} 此首歌存在錯誤,請手動刪除]\n原因:{str(e)[7:]}```")
                 return await ctx.send(f"```ini\n[{ctx.author.display_name} 新增 {SongList['song'][number-1]['title']} 到佇列]\n```")
             else:
-                return await ctx.send(f"```ini\n[因為歌單太大，現在不支援匯入全部歌單]\n```",delete_after=15)
+                return await ctx.send(f"```ini\n[因為歌單太大，現在不支援匯入全部歌單]\n```", delete_after=15)
         elif command == 'remove':
             if inputstr.split(' ')[1] is not None:
                 number = int(inputstr.split(' ')[1])
             else:
                 return await ctx.send('remove 此功能的參數必須是數字 ex:!pl remove 1')
-            with open('song.json','r') as f:
+            with open('song.json', 'r') as f:
                 SongList = json.loads(f.read())
             Song = SongList['song'].pop(number-1)
-            with open('song.json','w') as f:
-                json.dump(SongList,f)
+            with open('song.json', 'w') as f:
+                json.dump(SongList, f)
             return await ctx.send(f'```ini\n[{ctx.author.display_name} 從自定義播放清單中移除 {Song["title"]}]\n```', delete_after=15)
         elif command.isdigit():
-            with open('song.json','r') as f:
+            with open('song.json', 'r') as f:
                 SongList = json.loads(f.read())
             num = int(command)
             await ctx.trigger_typing()
@@ -369,14 +381,15 @@ class Music(commands.Cog):
                 await ctx.invoke(self.connect_)
             player = self.get_player(ctx)
             random.seed(datetime.now().timestamp())
-            RandomNumber = [random.randint(0,len(SongList['song'])-1) for i in range(num)]
+            RandomNumber = [random.randint(
+                0, len(SongList['song'])-1) for i in range(num)]
             BrokenSong = 0
             for i in RandomNumber:
                 Song = SongList['song'][i]
                 try:
                     if 'requester' not in Song:
                         Song['requester'] = ctx.author.display_name
-                    await player.queue.put((10,datetime.now().timestamp(),Song))
+                    await player.queue.put((10, datetime.now().timestamp(), Song))
                 except Exception as e:
                     print(e)
                     BrokenSong += 1
@@ -384,8 +397,8 @@ class Music(commands.Cog):
                     pass
             return await ctx.send(f'```ini\n[{ctx.author.display_name} 新增 {num-BrokenSong}首歌到佇列]\n```')
 
-    @commands.command(name='force',aliases=['f'])
-    async def force_(self,ctx,*,search:str):
+    @commands.command(name='force', aliases=['f'])
+    async def force_(self, ctx, *, search: str):
         """插歌指令,和play的差別只在這首歌會在佇列最上面
         """
         vc = ctx.voice_client
@@ -395,14 +408,16 @@ class Music(commands.Cog):
 
         player = self.get_player(ctx)
         source = await YTDLSource.create_source(ctx, search, loop=self.bot.loop)
-        with open('song.json','r') as f:
+        with open('song.json', 'r') as f:
             SongList = json.loads(f.read())
         if source['webpage_url'] not in SongList['key']:
-            SongList['song'].append({'title':source['title'],'url':source['webpage_url'],'requester':source['requester'],'file_url':source['file_url']})
+            SongList['song'].append({'title': source['title'], 'url': source['webpage_url'],
+                                     'requester': source['requester'], 'file_url': source['file_url']})
             SongList['key'].append(source['webpage_url'])
-            with open('song.json','w') as f:
-                json.dump(SongList,f)
-        return await player.queue.put((1,datetime.now().timestamp(),source))
+            with open('song.json', 'w') as f:
+                json.dump(SongList, f)
+        return await player.queue.put((1, datetime.now().timestamp(), source))
+
     @commands.command(name='pause')
     async def pause_(self, ctx):
         """暫停現在播放的歌曲"""
@@ -443,7 +458,7 @@ class Music(commands.Cog):
             return
 
         vc.stop()
-        await ctx.send(f'**`{ctx.author.display_name}`**: 跳過此首歌曲!',delete_after=15)
+        await ctx.send(f'**`{ctx.author.display_name}`**: 跳過此首歌曲!', delete_after=15)
 
     @commands.command(name='queue', aliases=['q'])
     async def queue_info(self, ctx):
@@ -459,7 +474,8 @@ class Music(commands.Cog):
         # Grab up to 15 entries from the queue...
         upcoming = list(itertools.islice(player.queue._queue, 0, 15))
         fmt = '\n'.join(f'**`{_[2]["title"]}`**' for _ in upcoming)
-        embed = discord.Embed(title=f'即將播放 - 總共有{player.queue.qsize()}首 - Next {len(upcoming)}', description=fmt)
+        embed = discord.Embed(
+            title=f'即將播放 - 總共有{player.queue.qsize()}首 - Next {len(upcoming)}', description=fmt)
 
         await ctx.send(embed=embed)
 
@@ -484,7 +500,7 @@ class Music(commands.Cog):
         player.np = await ctx.send(f'**正在播放:** `{vc.source.title}` '
                                    f'由`{vc.source.requester}`點播')
 
-    @commands.command(name='volume', aliases=['vol','v'])
+    @commands.command(name='volume', aliases=['vol', 'v'])
     async def change_volume(self, ctx, *, vol: float):
         """調整音量 1~100
 
@@ -499,7 +515,7 @@ class Music(commands.Cog):
             return await ctx.send('最高品質靜悄悄', delete_after=20)
 
         if not 0 < vol < 101:
-            return await ctx.send('請輸入介於1~100間的數字',delete_after=30)
+            return await ctx.send('請輸入介於1~100間的數字', delete_after=30)
 
         player = self.get_player(ctx)
 
@@ -507,7 +523,7 @@ class Music(commands.Cog):
             vc.source.volume = vol / 100
 
         player.volume = vol / 100
-        await ctx.send(f'**`{ctx.author.display_name}`**: 將音量設定為 **{vol}%**',delete_after=30)
+        await ctx.send(f'**`{ctx.author.display_name}`**: 將音量設定為 **{vol}%**', delete_after=30)
 
     @commands.command(name='stop')
     async def stop_(self, ctx):
@@ -523,19 +539,24 @@ class Music(commands.Cog):
 
         await self.cleanup(ctx.guild)
 
-    @commands.command(pass_context = True)
-    async def clear(self,ctx):
+    @commands.command(pass_context=True)
+    async def clear(self, ctx):
         """清除指令
         此指令會清除所有機器人發言和其他使用者發出指令的留言
         """
-        check = lambda message: message.author.id == bot.user.id or '!' in message.content
-        await ctx.channel.purge(check=check,limit=100)
+        def check(
+            message): return message.author.id == bot.user.id or '!' in message.content
+        await ctx.channel.purge(check=check, limit=100)
 
-bot = commands.Bot(command_prefix=commands.when_mentioned_or('!'), description='Made by Tamama\n痾 那個阿 歌單不小心在更新更失敗，所以都不見了')
+
+bot = commands.Bot(command_prefix=commands.when_mentioned_or(
+    '!'), description='Made by Tamama\n痾 那個阿 歌單不小心在更新更失敗，所以都不見了')
+
+
 @bot.event
 async def on_ready():
     print('Logged in as:\n{0} (ID: {0.id})'.format(bot.user))
 bot.add_cog(Music(bot))
-with open('key.txt','r') as f:
+with open('key.txt', 'r') as f:
     key = f.read()
 bot.run(key.strip())
